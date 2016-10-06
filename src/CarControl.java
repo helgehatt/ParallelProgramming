@@ -9,15 +9,21 @@ import java.awt.Color;
 
 class Alley {
 	
-	Semaphore up 	= new Semaphore(0);
-	Semaphore down 	= new Semaphore(0);
+	Semaphore up 	= new Semaphore(1);
+	Semaphore down 	= new Semaphore(1);
 	
-	public void enter(int no) {
-		
+	public void enter(int no) throws InterruptedException {
+		if (no < 5)
+			down.P();
+		else 
+			up.P();
 	}
 	
 	public void leave(int no) {
-		
+		if (no < 5)
+			down.V();
+		else
+			up.V();
 	}
 }
 
@@ -61,17 +67,22 @@ class Car extends Thread {
     Pos barpos;                      // Barrierpositon (provided by GUI)
     Color col;                       // Car  color
     Gate mygate;                     // Gate at startposition
+    Semaphore[][] tiles;
 
 
     int speed;                       // Current car speed
     Pos curpos;                      // Current position 
     Pos newpos;                      // New position to go to
+    
+    Pos enter;
+    Pos leave;
 
-    public Car(int no, CarDisplayI cd, Gate g) {
+    public Car(int no, CarDisplayI cd, Gate g, Semaphore[][] tiles) {
 
         this.no = no;
         this.cd = cd;
         mygate = g;
+        this.tiles = tiles;
         startpos = cd.getStartPos(no);
         barpos = cd.getBarrierPos(no);  // For later use
 
@@ -82,6 +93,22 @@ class Car extends Thread {
             basespeed = 0;  
             variation = 0; 
             setPriority(Thread.MAX_PRIORITY); 
+        }
+        
+        switch(no) {
+        case 1:
+        case 2:
+        	enter = new Pos(2,1);
+        	leave = new Pos(9,1);
+        	break;
+        case 3:
+        case 4:
+        	enter = new Pos(1,3);
+        	leave = new Pos(9,1);
+        	break;
+        default:
+        	enter = new Pos(10,0);
+        	leave = new Pos(0,2);
         }
     }
 
@@ -124,6 +151,14 @@ class Car extends Thread {
     boolean atGate(Pos pos) {
         return pos.equals(startpos);
     }
+    
+    boolean atEnter(Pos pos) {
+    	return pos.equals(enter);
+    }
+    
+    boolean atLeave(Pos pos) {
+    	return pos.equals(leave);
+    }
 
    public void run() {
         try {
@@ -138,9 +173,15 @@ class Car extends Thread {
                 if (atGate(curpos)) { 
                     mygate.pass(); 
                     speed = chooseSpeed();
+                } else if (atEnter(curpos)) {
+                	
+                } else if (atLeave(curpos)) {
+                	
                 }
                 	
                 newpos = nextPos(curpos);
+                
+                tiles[newpos.row][newpos.col].P();
                 
                 //  Move to new position 
                 cd.clear(curpos);
@@ -149,6 +190,8 @@ class Car extends Thread {
                 cd.clear(curpos,newpos);
                 cd.mark(newpos,col,no);
 
+                tiles[curpos.row][curpos.col].V();
+                
                 curpos = newpos;
             }
 
@@ -166,17 +209,27 @@ public class CarControl implements CarControlI{
     CarDisplayI cd;           // Reference to GUI
     Car[]  car;               // Cars
     Gate[] gate;              // Gates
+    Semaphore[][] tiles;
+    Alley alley;
 
     public CarControl(CarDisplayI cd) {
         this.cd = cd;
         car  = new  Car[9];
         gate = new Gate[9];
+        tiles = new Semaphore[11][12];
+        alley = new Alley(); 
+        
+        for (int x = 0; x < tiles.length; x++) {
+        	for (int y = 0; y < tiles[0].length; y++) {
+        		tiles[x][y] = new Semaphore(1);
+        	}
+        }
 
         for (int no = 0; no < 9; no++) {
             gate[no] = new Gate();
-            car[no] = new Car(no,cd,gate[no]);
+            car[no] = new Car(no,cd,gate[no], tiles);
             car[no].start();
-        } 
+        }
     }
 
    public void startCar(int no) {
