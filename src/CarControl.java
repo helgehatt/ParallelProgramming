@@ -9,21 +9,38 @@ import java.awt.Color;
 
 class Alley {
 	
-	Semaphore up 	= new Semaphore(1);
-	Semaphore down 	= new Semaphore(1);
+	int up 	= 0; // Children going up
+	int down 	= 0; // Children going down
+	Semaphore critical = new Semaphore(1); // Semaphore for critical region
 	
 	public void enter(int no) throws InterruptedException {
-		if (no < 5)
-			down.P();
-		else 
-			up.P();
+		critical.P();
+		if (no < 5){ // Going down
+			while (up != 0){ // Someone is going up, wait
+				critical.V();
+				Thread.sleep(200);
+				critical.P();
+			}
+			down++; // Now going down
+		} else { // Going up
+			while (down != 0){ // Someone is going down, wait
+				critical.V();
+				Thread.sleep(200);
+				critical.P();
+			}
+			up++; // Now going up
+		}
+		critical.V();
 	}
 	
-	public void leave(int no) {
-		if (no < 5)
-			down.V();
-		else
-			up.V();
+	public void leave(int no) throws InterruptedException {
+		critical.P();
+		if (no < 5) { // Done going down
+			down--;
+		} else { // Done going up
+			up--;
+		}
+		critical.V();
 	}
 }
 
@@ -68,6 +85,7 @@ class Car extends Thread {
     Color col;                       // Car  color
     Gate mygate;                     // Gate at startposition
     Semaphore[][] tiles;
+    Alley alley;
 
 
     int speed;                       // Current car speed
@@ -77,12 +95,13 @@ class Car extends Thread {
     Pos enter;
     Pos leave;
 
-    public Car(int no, CarDisplayI cd, Gate g, Semaphore[][] tiles) {
+    public Car(int no, CarDisplayI cd, Gate g, Semaphore[][] tiles, Alley alley) {
 
         this.no = no;
         this.cd = cd;
         mygate = g;
         this.tiles = tiles;
+        this.alley = alley;
         startpos = cd.getStartPos(no);
         barpos = cd.getBarrierPos(no);  // For later use
 
@@ -174,9 +193,9 @@ class Car extends Thread {
                     mygate.pass(); 
                     speed = chooseSpeed();
                 } else if (atEnter(curpos)) {
-                	
+                	alley.enter(no);
                 } else if (atLeave(curpos)) {
-                	
+                	alley.leave(no);
                 }
                 	
                 newpos = nextPos(curpos);
@@ -227,7 +246,7 @@ public class CarControl implements CarControlI{
 
         for (int no = 0; no < 9; no++) {
             gate[no] = new Gate();
-            car[no] = new Car(no,cd,gate[no], tiles);
+            car[no] = new Car(no,cd,gate[no], tiles, alley);
             car[no].start();
         }
     }
