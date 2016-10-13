@@ -12,23 +12,30 @@ class Alley {
 	int up 	= 0; // Children going up
 	int down 	= 0; // Children going down
 	Semaphore critical = new Semaphore(1); // Semaphore for critical region
+	Semaphore wait = new Semaphore(0);
+	int waiting = 0;
 	
 	public void enter(int no) throws InterruptedException {
 		critical.P();
 		if (no < 5){ // Going down
 			while (up != 0){ // Someone is going up, wait
+				waiting++;
 				critical.V();
-				Thread.sleep(200);
-				critical.P();
+				wait.P();
 			}
 			down++; // Now going down
 		} else { // Going up
 			while (down != 0){ // Someone is going down, wait
+				waiting++;
 				critical.V();
-				Thread.sleep(200);
-				critical.P();
+				wait.P();
 			}
 			up++; // Now going up
+		}
+		if (waiting > 0){
+			waiting--;
+			wait.V();
+			return;
 		}
 		critical.V();
 	}
@@ -37,8 +44,18 @@ class Alley {
 		critical.P();
 		if (no < 5) { // Done going down
 			down--;
+			if (down == 0 && waiting > 0){
+				waiting--;
+				wait.V();
+				return;
+			}
 		} else { // Done going up
 			up--;
+			if (up == 0 && waiting > 0){
+				waiting--;
+				wait.V();
+				return;
+			}
 		}
 		critical.V();
 	}
