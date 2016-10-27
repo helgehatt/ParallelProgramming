@@ -9,55 +9,79 @@ import java.awt.Color;
 
 class Alley {
 	
-	int up 	= 0; // Children going up
-	int down 	= 0; // Children going down
-	Semaphore critical = new Semaphore(1); // Semaphore for critical region
-	Semaphore wait = new Semaphore(0);
-	int waiting = 0;
+	Semaphore critical 	= new Semaphore(1), // Semaphore for critical region
+			  up 		= new Semaphore(0),
+			  down 		= new Semaphore(0);
+	
+	int nup 			= 0, // Children going up
+		ndown 			= 0, // Children going down
+		dup 			= 0, // Children delayed up
+		ddown 			= 0; // Children delayed down
+	
 	
 	public void enter(int no) throws InterruptedException {
 		critical.P();
-		if (no < 5){ // Going down
-			while (up != 0){ // Someone is going up, wait
-				waiting++;
+		if (no < 5) // Going down
+		{ 
+			while (nup > 0){ // Someone is going up, wait
+				ddown++;
 				critical.V();
-				wait.P();
+				down.P();
 			}
-			down++; // Now going down
-		} else { // Going up
-			while (down != 0){ // Someone is going down, wait
-				waiting++;
+			
+			ndown++; // Now going down
+			
+			if (ddown > 0) 
+			{
+				ddown--;
+				down.V();
+			}
+			else critical.V();
+		} 
+		else // Going up
+		{ 
+			while (ndown != 0) // Someone is going down, wait
+			{ 
+				dup++;
 				critical.V();
-				wait.P();
+				up.P();
 			}
-			up++; // Now going up
+			
+			nup++; // Now going up
+			
+			if (dup > 0)
+			{
+				dup--;
+				up.V();
+			}
+			else critical.V();
 		}
-		if (waiting > 0){
-			waiting--;
-			wait.V();
-			return;
-		}
-		critical.V();
 	}
 	
 	public void leave(int no) throws InterruptedException {
 		critical.P();
-		if (no < 5) { // Done going down
-			down--;
-			if (down == 0 && waiting > 0){
-				waiting--;
-				wait.V();
-				return;
+		if (no < 5) // Done going down
+		{
+			ndown--;
+			
+			if (ndown == 0 && dup > 0)
+			{
+				dup--;
+				up.V();
 			}
-		} else { // Done going up
-			up--;
-			if (up == 0 && waiting > 0){
-				waiting--;
-				wait.V();
-				return;
-			}
+			else critical.V();
 		}
-		critical.V();
+		else // Done going up
+		{
+			nup--;
+			
+			if (nup == 0 && ddown > 0)
+			{
+				ddown--;
+				down.V();
+			}
+			else critical.V();
+		}		
 	}
 }
 
