@@ -40,7 +40,7 @@ class Alley {
 		} 
 		else // Going up
 		{ 
-			while (ndown != 0) // Someone is going down, wait
+			while (ndown > 0) // Someone is going down, wait
 			{ 
 				dup++;
 				critical.V();
