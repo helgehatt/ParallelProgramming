@@ -9,78 +9,49 @@ import java.awt.Color;
 
 class Alley {
 	
-	Semaphore critical 	= new Semaphore(1), // Semaphore for critical region
-			  up 		= new Semaphore(0),
-			  down 		= new Semaphore(0);
+	Semaphore	mutex 	= new Semaphore(1), // Semaphore for critical region
+			  	up 		= new Semaphore(0),
+			  	down 	= new Semaphore(0);
 	
-	int nup 			= 0, // Children going up
-		ndown 			= 0, // Children going down
-		dup 			= 0, // Children delayed up
-		ddown 			= 0; // Children delayed down
+	int 		nup 	= 0, // Children going up
+				ndown 	= 0, // Children going down
+				dup 	= 0, // Children delayed up
+				ddown 	= 0; // Children delayed down
 	
 	
 	public void enter(int no) throws InterruptedException {
-		critical.P();
-		if (no < 5) // Going down
-		{ 
-			while (nup > 0){ // Someone is going up, wait
-				ddown++;
-				critical.V();
-				down.P();
-			}
-			
-			ndown++; // Now going down
-			
-			if (ddown > 0) 
-			{
-				ddown--;
-				down.V();
-			}
-			else critical.V();
-		} 
-		else // Going up
-		{ 
-			while (ndown > 0) // Someone is going down, wait
-			{ 
-				dup++;
-				critical.V();
-				up.P();
-			}
-			
-			nup++; // Now going up
-			
-			if (dup > 0)
-			{
-				dup--;
-				up.V();
-			}
-			else critical.V();
+		if (no < 5)
+		{
+			mutex.P();
+			if (nup > 0) { ddown++; mutex.V(); down.P(); }
+			ndown++;
+			if (ddown > 0) { ddown--; down.V();	}
+			else mutex.V();
+		}
+		else 
+		{
+			mutex.P();
+			if (ndown > 0) { dup++; mutex.V(); up.P(); }
+			nup++;
+			if (dup > 0) { dup--; up.V(); }
+			else mutex.V();
 		}
 	}
 	
 	public void leave(int no) throws InterruptedException {
-		critical.P();
-		if (no < 5) // Done going down
+		if (no < 5)
 		{
-			ndown--;
-			
-			if (ndown == 0 && dup > 0)
-			{
-				dup--;
-				up.V();
-			}
-			else critical.V();
+			mutex.P();
+			ndown--;			
+			if (ndown == 0 && dup > 0) { dup--; up.V();	}
+			else mutex.V();
 		}
-		else // Done going up
+		else
 		{
-			nup--;
-			
-			if (nup == 0 && ddown > 0)
-			{
-				ddown--;
-				down.V();
-			}
-			else critical.V();
+			mutex.P();
+			nup--;			
+			if (nup == 0 && ddown > 0) { ddown--; down.V();	}
+			else mutex.V();
 		}		
 	}
 }

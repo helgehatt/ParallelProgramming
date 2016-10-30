@@ -1,14 +1,14 @@
 #define CARS	4
 
-#define P(X)	atomic { (X > 0) -> X--; }
-#define V(X)	{ X++ }
+#define P(X)	atomic { X > 0 -> X--; }
+#define V(X)	atomic { X++; }
 
 pid up1;
 pid up2;
 pid down1;
 pid down2;
 
-int crit	= 1;
+int mutex	= 1;
 int up 		= 0;
 int down 	= 0;
 
@@ -30,93 +30,57 @@ init {
 }
 
 inline ENTER(type) {
-	P(crit);
-	
 	if 
-		:: type == DOWN	->
-		
-			do
-				:: !(nup > 0) 	-> break
-				:: else 		->
-					
-					ddown++;
-					V(crit);
-					P(down)
-			od;
-			
-			ndown++;
-			
-			if
-				:: (ddown > 0) -> 
-					
-					ddown--;
-					V(down)
-
-				:: else -> V(crit)
-			fi
-			 
-		:: type == UP	->
-		
-			do
-				:: !(ndown > 0) -> break
-				:: else			->
-					
-					dup++;
-					V(crit);
-					P(up)
-			od;
-			
-			nup++;
-			
-			if
-				:: (dup > 0) -> 
-					
-					dup--;
-					V(up)
-
-				:: else -> V(crit)
-			fi
+	:: type == DOWN ->
+		P(mutex);
+		if 
+		:: nup > 0 		-> ddown++; V(mutex); P(down) 
+		:: else			-> skip
+		fi;
+		ndown++;
+		if 
+		:: ddown > 0 	-> ddown--; V(down)
+		:: else 		-> V(mutex)
+		fi		
+	:: else 		->
+		P(mutex);
+		if 
+		:: ndown > 0 	-> dup++; V(mutex); P(up) 
+		:: else		 	-> skip
+		fi;
+		nup++;
+		if 
+		:: dup > 0 		-> dup--; V(up)
+		:: else 		-> V(mutex)
+		fi
 	fi;
 }
 
 inline LEAVE(type) {
-	P(crit);
-	
-	if 
-		:: type == DOWN -> 
-		
-			ndown--;
-			
-			if
-				:: (ndown == 0 && dup > 0) -> 
-					
-					dup--;
-					V(up)
-					
-				:: else -> V(crit)
-			fi
-			
-		:: type == UP 	-> 
-		
-			nup--;
-			
-			if
-				:: (nup == 0 && ddown > 0) -> 
-					
-					ddown--;
-					V(down)
-					
-				:: else -> V(crit)
-			fi
-	fi;	
+	if
+	:: type == DOWN ->
+		P(mutex);
+		ndown--;
+		if 
+		:: ndown == 0 && dup > 0 -> dup--; V(up)
+		:: else					 -> V(mutex)
+		fi	
+	:: else			->
+		P(mutex);
+		nup--;
+		if 
+		:: nup == 0 && ddown > 0 -> ddown--; V(down)
+		:: else					 -> V(mutex)
+		fi
+	fi;
 }
 
 proctype Car(mtype type) {
 		ENTER(type);
 		
-		LEAVE(type)
+		LEAVE(type);
 }
 
-active proctype Check_Inv() {
-	!(crit <=1 && (nup == 0 || ndown == 0)) -> assert(true)
-}
+/*active proctype Check_Inv() {
+	!(mutex <=1 && (nup == 0 || ndown == 0)) -> assert(false)
+}*/
