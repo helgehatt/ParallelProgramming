@@ -7,6 +7,97 @@
 
 import java.awt.Color;
 
+class Barrier {
+		
+	Semaphore	mutex	= new Semaphore(1),
+				wait	= new Semaphore(0);
+				
+	int 		count	= 0;
+	boolean		isOn	= false;
+	
+	public void sync() throws InterruptedException {
+		mutex.P();
+		if(isOn) {
+			count++;
+			if(count == 9) {
+				for(; 0 < count; count--) {
+					wait.V();
+				}
+			}
+			mutex.V();
+			wait.P();
+		} else {
+			mutex.V();
+		}
+		
+	}  // Wait for others to arrive (if barrier active)
+
+	public void on() throws InterruptedException {
+		mutex.P();
+		isOn = true;
+		mutex.V();
+		
+	}    // Activate barrier
+
+	public void off() throws InterruptedException {
+		mutex.P();
+		isOn = false;
+		for(; 0 < count; count--) {
+			wait.V();
+		}
+		mutex.V();
+		
+	}   // Deactivate barrier 
+
+}
+
+
+class BarrierMonitor extends Barrier {
+	
+				
+	int 		count	= 0;
+	boolean		isOn	= false;
+	
+	boolean 	synced 	= false;
+	
+	public synchronized void sync() throws InterruptedException {
+		
+		if (isOn) {
+			while (synced) wait();
+			
+			count++;
+			
+			if(count == 9) {
+				synced = true;
+			} else while (!synced) wait();
+			
+			if (synced) {
+				notify();
+				count--;
+				
+				if (count == 0) synced = false;
+			}
+			
+		}
+		
+	}  // Wait for others to arrive (if barrier active)
+
+	public synchronized void on() throws InterruptedException {		
+		isOn = true;		
+		
+	}    // Activate barrier
+
+	public synchronized void off() throws InterruptedException {		
+		isOn = false;
+		if (count > 0) {
+			synced = true;
+			notify();				
+		}
+	}   // Deactivate barrier 
+
+}
+
+
 class Alley {
 	
 	Semaphore	mutex 	= new Semaphore(1), // Semaphore for critical region
@@ -56,6 +147,48 @@ class Alley {
 	}
 }
 
+
+class AlleyMonitor extends Alley {
+		
+	int 		nup 	= 0, // Children going up
+				ndown 	= 0, // Children going down
+				dup 	= 0, // Children delayed up
+				ddown 	= 0; // Children delayed down
+	
+	
+	public synchronized void enter(int no) throws InterruptedException {
+		if (no < 5)
+		{			
+			if (nup > 0) { ddown++;  while(nup>0) {wait();} }
+			ndown++;
+			if (ddown > 0) { ddown--; notify();	}
+			
+		}
+		else 
+		{			
+			if (ndown > 0) { dup++;  while(ndown>0) {wait();} }
+			nup++;
+			if (dup > 0) { dup--; notify(); }
+			
+		}
+	}
+	
+	public synchronized void leave(int no) throws InterruptedException {
+		if (no < 5)
+		{			
+			ndown--;			
+			if (ndown == 0 && dup > 0) { dup--; notify();}			
+		}
+		else
+		{			
+			nup--;			
+			if (nup == 0 && ddown > 0) { ddown--; notify();	}			
+		}		
+	}
+}
+
+
+
 class Gate {
 
     Semaphore g = new Semaphore(0);
@@ -98,6 +231,9 @@ class Car extends Thread {
     Gate mygate;                     // Gate at startposition
     Semaphore[][] tiles;
     Alley alley;
+    boolean inAlley;
+    Barrier barrier;
+    boolean running;
 
 
     int speed;                       // Current car speed
@@ -107,15 +243,18 @@ class Car extends Thread {
     Pos enter;
     Pos leave;
 
-    public Car(int no, CarDisplayI cd, Gate g, Semaphore[][] tiles, Alley alley) {
+    public Car(int no, CarDisplayI cd, Gate g, Semaphore[][] tiles, Alley alley, Barrier barrier) {
 
         this.no = no;
         this.cd = cd;
         mygate = g;
         this.tiles = tiles;
         this.alley = alley;
+        inAlley = false;
+        this.barrier = barrier;
         startpos = cd.getStartPos(no);
         barpos = cd.getBarrierPos(no);  // For later use
+        running = true;
 
         col = chooseColor();
 
@@ -190,6 +329,10 @@ class Car extends Thread {
     boolean atLeave(Pos pos) {
     	return pos.equals(leave);
     }
+    
+    boolean atBarrier(Pos pos) {
+    	return pos.equals(barpos);
+    }
 
    public void run() {
         try {
@@ -198,7 +341,7 @@ class Car extends Thread {
             curpos = startpos;
             cd.mark(curpos,col,no);
 
-            while (true) { 
+            while (running) {
                 sleep(speed());
   
                 if (atGate(curpos)) { 
@@ -206,8 +349,12 @@ class Car extends Thread {
                     speed = chooseSpeed();
                 } else if (atEnter(curpos)) {
                 	alley.enter(no);
+                	inAlley = true;
                 } else if (atLeave(curpos)) {
                 	alley.leave(no);
+                	inAlley = false;
+                } else if (atBarrier(curpos)) {
+                	barrier.sync();
                 }
                 	
                 newpos = nextPos(curpos);
@@ -226,12 +373,20 @@ class Car extends Thread {
                 curpos = newpos;
             }
 
+            // Remove car
+        	if (inAlley)
+    			try { alley.leave(no); } catch (InterruptedException e) { }
+        	cd.clear(curpos);
+            tiles[curpos.row][curpos.col].V();
+
         } catch (Exception e) {
             cd.println("Exception in Car no. " + no);
             System.err.println("Exception in Car no. " + no + ":" + e);
             e.printStackTrace();
         }
     }
+
+
 
 }
 
@@ -242,13 +397,15 @@ public class CarControl implements CarControlI{
     Gate[] gate;              // Gates
     Semaphore[][] tiles;
     Alley alley;
+    Barrier barrier;
 
     public CarControl(CarDisplayI cd) {
         this.cd = cd;
         car  = new  Car[9];
         gate = new Gate[9];
         tiles = new Semaphore[11][12];
-        alley = new Alley(); 
+        alley = new AlleyMonitor(); 
+        barrier = new BarrierMonitor();
         
         for (int x = 0; x < tiles.length; x++) {
         	for (int y = 0; y < tiles[0].length; y++) {
@@ -258,7 +415,7 @@ public class CarControl implements CarControlI{
 
         for (int no = 0; no < 9; no++) {
             gate[no] = new Gate();
-            car[no] = new Car(no,cd,gate[no], tiles, alley);
+            car[no] = new Car(no,cd,gate[no], tiles, alley, barrier);
             car[no].start();
         }
     }
@@ -272,11 +429,11 @@ public class CarControl implements CarControlI{
     }
 
     public void barrierOn() { 
-        cd.println("Barrier On not implemented in this version");
+    	try { barrier.on(); } catch (InterruptedException e) { }
     }
 
     public void barrierOff() { 
-        cd.println("Barrier Off not implemented in this version");
+    	try { barrier.off(); } catch (InterruptedException e) { }
     }
 
     public void barrierSet(int k) { 
@@ -286,12 +443,14 @@ public class CarControl implements CarControlI{
         try { Thread.sleep(3000); } catch (InterruptedException e) { }
      }
 
-    public void removeCar(int no) { 
-        cd.println("Remove Car not implemented in this version");
+    public void removeCar(int no) {
+    	car[no].running = false;
     }
 
-    public void restoreCar(int no) { 
-        cd.println("Restore Car not implemented in this version");
+    public void restoreCar(int no) {
+    	if (car[no].running == true) return;
+    	car[no] = new Car(no, cd, gate[no], tiles, alley, barrier);
+    	car[no].start();
     }
 
     /* Speed settings for testing purposes */

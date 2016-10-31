@@ -76,11 +76,15 @@ inline LEAVE(type) {
 }
 
 proctype Car(mtype type) {
+	do
+	::
 		ENTER(type);
 		
-		LEAVE(type);
+		LEAVE(type)
+
+	od;
 }
 
-/*active proctype Check_Inv() {
-	!(mutex <=1 && (nup == 0 || ndown == 0)) -> assert(false)
-}*/
+active proctype Check_Inv() {
+end:	!(mutex <=1 && (nup == 0 || ndown == 0)) -> assert(false)
+}
