@@ -17,10 +17,10 @@ class Barrier {
 	
 	public void sync() throws InterruptedException {
 		mutex.P();
-		if(isOn) {
+		if (isOn) {
 			count++;
-			if(count == 9) {
-				for(; 0 < count; count--) {
+			if (count == 9) {
+				for (; 0 < count; count--) {
 					wait.V();
 				}
 			}
