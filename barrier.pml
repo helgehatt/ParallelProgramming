@@ -1,4 +1,5 @@
-#define CARS 	4
+
+#define CARS 	4
 
 #define P(X)	atomic { X > 0 -> X--; }
 #define V(X)	atomic { X++; }
@@ -9,10 +10,13 @@ int wait	= 0;
 int count	= 0;
 bool isOn	= 1;
 
-int syncCount[CARS]
+int syncCount[CARS];
 
-inline abs(X) {
-	if :: X < 0 -> X = -X else skip fi
+inline Check_Inv() {
+	int i;
+	for (i in syncCount) {
+		assert(syncCount[i] == syncCount[_pid])
+	}
 }
 
 inline SYNC() {
@@ -24,32 +28,26 @@ inline SYNC() {
 
 		if 
 		:: count == CARS->
+			Check_Inv();
 			do
 			:: count > 0 	-> count--; V(wait)
 			:: else 	 	-> break
 			od
+			P(wait);
+			V(mutex)
+			
 		:: else			-> 
-			skip
+			V(mutex);
+			P(wait)
 		fi
 
-		V(mutex);
-		P(wait)
 	:: else			-> V(mutex)
-	fi;
+	fi
 }
 
 active [CARS] proctype Car() {
 	do
 	::
 		SYNC()
-	od;
-}
-
-active proctype Check_Inv() {
-	do
-	::
-end:	for (i : 1 .. CARS) {
-			assert(abs(syncCount[i] - syncCount[i-1]) <= 5);
-		}
-	od;
+	od
 }

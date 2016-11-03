@@ -23,9 +23,12 @@ class Barrier {
 				for (; 0 < count; count--) {
 					wait.V();
 				}
+				wait.P();
+				mutex.V();
+			} else {
+				mutex.V();
+				wait.P();				
 			}
-			mutex.V();
-			wait.P();
 		} else {
 			mutex.V();
 		}
