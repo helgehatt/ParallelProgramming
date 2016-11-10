@@ -1,4 +1,4 @@
-#define sem 	int
+#define sem 	byte
 
 #define P(X)	atomic { X > 0 -> X--; }
 #define V(X)	atomic { X++; }
@@ -7,10 +7,10 @@ sem mutex	= 1;
 sem up 		= 0;
 sem down 	= 0;
 
-int nup 	= 0;
-int ndown 	= 0;
-int dup 	= 0;
-int ddown 	= 0;
+byte nup 	= 0;
+byte ndown 	= 0;
+byte dup 	= 0;
+byte ddown 	= 0;
 
 mtype = { UP, DOWN }
 
@@ -18,6 +18,10 @@ init {
 	atomic {
 		run Car(UP);
 		run Car(UP);
+		run Car(UP);
+		run Car(UP);
+		run Car(DOWN);
+		run Car(DOWN);
 		run Car(DOWN);
 		run Car(DOWN);
 	}
@@ -78,5 +82,5 @@ proctype Car(mtype type) {
 }
 
 active proctype Check_Inv() {
-end: nup > 0 && ndown > 0 -> assert(false)
+end: nup > 0 && ndown > 0 -> assert(false);
 }

@@ -10,19 +10,34 @@ import java.awt.Color;
 class Barrier {
 		
 	Semaphore	mutex	= new Semaphore(1),
-				wait	= new Semaphore(0);
+				enter	= new Semaphore(0),
+				leave	= new Semaphore(0);
 				
-	int 		count	= 0;
+	int 		nenter	= 0,
+				nleave	= 0;
 	boolean		isOn	= false;
 	
 	public void sync() throws InterruptedException {
 		mutex.P();
 		if (isOn) {
-			if (count == 8) {
-				for (; count > 0; count--) wait.V();
+			if (nenter == 8) {
+				for (; nenter > 0; nenter--) enter.V();
+			} else { 
+				nenter++; 
 				mutex.V();
-			} else { count++; mutex.V(); wait.P(); }
-		} else { mutex.V(); }		
+				enter.P();
+				mutex.P();
+			}
+			
+			if (nleave == 8) {
+				for (; nleave > 0; nleave--) leave.V();
+				mutex.V();
+			} else { 
+				nleave++; 
+				mutex.V();
+				leave.P(); 
+			}
+		} else { mutex.V(); }
 	}
 
 	public void on() throws InterruptedException {
@@ -34,7 +49,10 @@ class Barrier {
 	public void off() throws InterruptedException {
 		mutex.P();
 		isOn = false;
-		for(; 0 < count; count--) wait.V();
+		for (int i =          nenter; i > 0; i--) enter.V();
+		for (int i = nleave + nenter; i > 0; i--) leave.V();
+		nenter = 0;
+		nleave = 0;
 		mutex.V();		
 	} 
 
@@ -245,7 +263,44 @@ class AlleyMonitor extends Alley {
 	}
 }
 
-
+class AlleyMonitorFair extends Alley {
+	
+	int 		nup 	= 0, // Children going up
+				ndown 	= 0, // Children going down
+				dup 	= 0, // Children delayed up
+				ddown 	= 0; // Children delayed down
+	
+	
+	public synchronized void enter(int no) throws InterruptedException {
+		if (no < 5)
+		{			
+			if (nup > 0) { ddown++;  while(nup>0) {wait();} }
+			ndown++;
+			if (ddown > 0) { ddown--; notify();	}
+			
+		}
+		else 
+		{			
+			if (ndown > 0) { dup++;  while(ndown>0) {wait();} }
+			nup++;
+			if (dup > 0) { dup--; notify(); }
+			
+		}
+	}
+	
+	public synchronized void leave(int no) throws InterruptedException {
+		if (no < 5)
+		{			
+			ndown--;			
+			if (ndown == 0 && dup > 0) { dup--; notify();}			
+		}
+		else
+		{			
+			nup--;			
+			if (nup == 0 && ddown > 0) { ddown--; notify();	}			
+		}		
+	}
+}
 
 class Gate {
 
@@ -463,7 +518,7 @@ public class CarControl implements CarControlI{
         gate = new Gate[9];
         tiles = new Semaphore[11][12];
         alley = new AlleyMonitor(); 
-        barrier = new BarrierThreshold();
+        barrier = new Barrier();
         
         for (int x = 0; x < tiles.length; x++) {
         	for (int y = 0; y < tiles[0].length; y++) {

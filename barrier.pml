@@ -1,5 +1,5 @@
 
-#define sem		int
+#define sem		byte
 
 #define CARS 	4
 
@@ -7,42 +7,50 @@
 #define V(X)	atomic { X++; }
 
 sem mutex 	= 1;
-sem wait	= 0;
+sem enter	= 0;
+sem leave	= 0;
 
-int count	= 0;
-bool isOn	= 1;
+byte nenter	= 0;
+byte nleave = 0;
 
-int syncCount[CARS];
-
-inline Check_Inv() {
-	int i;
-	for (i in syncCount) {
-		assert(syncCount[i] == syncCount[_pid])
-	}
-}
+byte syncCount[CARS];
+byte barrierCount = 0;
 
 inline SYNC() {
 	P(mutex);
 	syncCount[_pid]++;
-	if
-	:: isOn == 1 ->
-		if 
-		:: count == CARS-1 ->
-			Check_Inv();
-			do
-			:: count > 0 	-> count--; V(wait)
-			:: else 	 	-> break
-			od
-			V(mutex)			
-		:: else	-> count++; V(mutex); P(wait)
-		fi
-	:: else	-> V(mutex)
-	fi
+	if 
+	:: nenter == CARS-1 ->
+		do
+		:: nenter > 0 	-> nenter--; V(enter)
+		:: else 	 	-> break
+		od			
+	:: else	-> nenter++; V(mutex); P(enter); P(mutex)
+	fi;
+	
+	if 
+	:: nleave == CARS-1 ->
+		do
+		:: nleave > 0 	-> nleave--; V(leave)
+		:: else 	 	-> barrierCount++; break
+		od;
+		V(mutex)
+	:: else	-> nleave++; V(mutex); P(leave)
+	fi;
 }
 
 active [CARS] proctype Car() {
 	do
-	::
+	:: 
 		SYNC()
-	od
+	od;
+}
+
+active proctype Check_Inv() {
+	if
+	:: syncCount[0] - barrierCount > 1 -> assert(false)
+	:: syncCount[1] - barrierCount > 1 -> assert(false)
+	:: syncCount[2] - barrierCount > 1 -> assert(false)
+	:: syncCount[3] - barrierCount > 1 -> assert(false)
+	fi;
 }
