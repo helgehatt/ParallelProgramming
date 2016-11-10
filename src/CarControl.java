@@ -82,6 +82,80 @@ class BarrierMonitor extends Barrier {
 }
 
 
+class BarrierThreshold extends Barrier {
+	
+	Semaphore	mutex	= new Semaphore(1),
+				wait	= new Semaphore(0),
+				thresholdWait = new Semaphore(0);
+				
+	int 		threshold = 9;
+	int			newThreshold = -1;
+	int 		count	= 0;
+	boolean		isOn	= false;
+	
+	public void sync() throws InterruptedException {
+		mutex.P();
+		if(isOn) {
+			count++;
+			if(count >= threshold) {
+				for(int i = 0; i < threshold; i++) {
+					count--;
+					wait.V();
+				}
+				if (newThreshold > -1)
+					thresholdWait.V();
+			}
+			mutex.V();
+			wait.P();
+		} else {
+			mutex.V();
+		}
+		
+	}  // Wait for others to arrive (if barrier active)
+
+	public void on() throws InterruptedException {
+		mutex.P();
+		isOn = true;
+		mutex.V();
+		
+	}    // Activate barrier
+
+	public void off() throws InterruptedException {
+		mutex.P();
+		isOn = false;
+		for(; 0 < count; count--) {
+			wait.V();
+		}
+		mutex.V();
+		
+	}   // Deactivate barrier
+	
+	public void set(int k) throws InterruptedException{
+		mutex.P();
+		this.newThreshold = k;
+		if (newThreshold <= threshold){
+			threshold = newThreshold;
+			mutex.V();
+			return;
+		}
+		while (newThreshold <= count){
+			for(int j = 0; j < newThreshold; j++) {
+				count--;
+				wait.V();
+			}
+		}
+		if (0 < count && threshold < newThreshold){
+			mutex.V();
+			thresholdWait.P();
+			mutex.P();
+			threshold = newThreshold;
+			newThreshold = -1;
+		}
+		mutex.V();
+	}
+
+}
+
 class Alley {
 	
 	Semaphore	mutex 	= new Semaphore(1), // Semaphore for critical region
@@ -389,7 +463,7 @@ public class CarControl implements CarControlI{
         gate = new Gate[9];
         tiles = new Semaphore[11][12];
         alley = new AlleyMonitor(); 
-        barrier = new BarrierMonitor();
+        barrier = new BarrierThreshold();
         
         for (int x = 0; x < tiles.length; x++) {
         	for (int y = 0; y < tiles[0].length; y++) {
@@ -421,10 +495,12 @@ public class CarControl implements CarControlI{
     }
 
     public void barrierSet(int k) { 
-        cd.println("Barrier threshold setting not implemented in this version");
-         // This sleep is for illustrating how blocking affects the GUI
-        // Remove when feature is properly implemented.
-        try { Thread.sleep(3000); } catch (InterruptedException e) { }
+        if (barrier instanceof BarrierThreshold)
+			try {
+				((BarrierThreshold) barrier).set(k);
+			} catch (InterruptedException e1) {}
+        else
+        	cd.println("Barrier threshold setting not implemented in this version");
      }
 
     public void removeCar(int no) {
