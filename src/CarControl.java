@@ -18,39 +18,25 @@ class Barrier {
 	public void sync() throws InterruptedException {
 		mutex.P();
 		if (isOn) {
-			count++;
-			if (count == 9) {
-				for (; 0 < count; count--) {
-					wait.V();
-				}
-				wait.P();
+			if (count == 8) {
+				for (; count > 0; count--) wait.V();
 				mutex.V();
-			} else {
-				mutex.V();
-				wait.P();				
-			}
-		} else {
-			mutex.V();
-		}
-		
-	}  // Wait for others to arrive (if barrier active)
+			} else { count++; mutex.V(); wait.P(); }
+		} else { mutex.V(); }		
+	}
 
 	public void on() throws InterruptedException {
 		mutex.P();
 		isOn = true;
-		mutex.V();
-		
-	}    // Activate barrier
+		mutex.V();		
+	}
 
 	public void off() throws InterruptedException {
 		mutex.P();
 		isOn = false;
-		for(; 0 < count; count--) {
-			wait.V();
-		}
-		mutex.V();
-		
-	}   // Deactivate barrier 
+		for(; 0 < count; count--) wait.V();
+		mutex.V();		
+	} 
 
 }
 
@@ -76,19 +62,15 @@ class BarrierMonitor extends Barrier {
 			
 			if (synced) {
 				notify();
-				count--;
-				
+				count--;				
 				if (count == 0) synced = false;
-			}
-			
-		}
-		
-	}  // Wait for others to arrive (if barrier active)
+			}			
+		}		
+	}
 
 	public synchronized void on() throws InterruptedException {		
 		isOn = true;		
-		
-	}    // Activate barrier
+	}
 
 	public synchronized void off() throws InterruptedException {		
 		isOn = false;
@@ -96,8 +78,7 @@ class BarrierMonitor extends Barrier {
 			synced = true;
 			notify();				
 		}
-	}   // Deactivate barrier 
-
+	}
 }
 
 

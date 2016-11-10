@@ -1,11 +1,13 @@
 
+#define sem		int
+
 #define CARS 	4
 
 #define P(X)	atomic { X > 0 -> X--; }
 #define V(X)	atomic { X++; }
 
-int mutex 	= 1;
-int wait	= 0;
+sem mutex 	= 1;
+sem wait	= 0;
 
 int count	= 0;
 bool isOn	= 1;
@@ -23,25 +25,18 @@ inline SYNC() {
 	P(mutex);
 	syncCount[_pid]++;
 	if
-	:: isOn == 1	->
-		count++;
-
+	:: isOn == 1 ->
 		if 
-		:: count == CARS->
+		:: count == CARS-1 ->
 			Check_Inv();
 			do
 			:: count > 0 	-> count--; V(wait)
 			:: else 	 	-> break
 			od
-			P(wait);
-			V(mutex)
-			
-		:: else			-> 
-			V(mutex);
-			P(wait)
+			V(mutex)			
+		:: else	-> count++; V(mutex); P(wait)
 		fi
-
-	:: else			-> V(mutex)
+	:: else	-> V(mutex)
 	fi
 }
 

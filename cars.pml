@@ -1,16 +1,11 @@
-#define CARS	4
+#define sem 	int
 
 #define P(X)	atomic { X > 0 -> X--; }
 #define V(X)	atomic { X++; }
 
-pid up1;
-pid up2;
-pid down1;
-pid down2;
-
-int mutex	= 1;
-int up 		= 0;
-int down 	= 0;
+sem mutex	= 1;
+sem up 		= 0;
+sem down 	= 0;
 
 int nup 	= 0;
 int ndown 	= 0;
@@ -18,14 +13,13 @@ int dup 	= 0;
 int ddown 	= 0;
 
 mtype = { UP, DOWN }
-mtype cars[CARS];
 
 init {
 	atomic {
-		up1 = run Car(UP);
-		up2 = run Car(UP);
-		down1 = run Car(DOWN);
-		down2 = run Car(DOWN)
+		run Car(UP);
+		run Car(UP);
+		run Car(DOWN);
+		run Car(DOWN);
 	}
 }
 
@@ -78,13 +72,11 @@ inline LEAVE(type) {
 proctype Car(mtype type) {
 	do
 	::
-		ENTER(type);
-		
+		ENTER(type);		
 		LEAVE(type)
-
 	od;
 }
 
 active proctype Check_Inv() {
-end:	!(mutex <=1 && (nup == 0 || ndown == 0)) -> assert(false)
+end: nup > 0 && ndown > 0 -> assert(false)
 }
