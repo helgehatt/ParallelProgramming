@@ -114,9 +114,8 @@ class BarrierThreshold extends Barrier {
 	public void off() throws InterruptedException {
 		mutex.P();
 		isOn = false;
-		for(; 0 < count; count--) {
-			wait.V();
-		}
+		for (; count > 0; count--) wait.V();
+		if (tWaiting){ tWaiting = false; tWait.V(); }
 		mutex.V();
 		
 	}   // Deactivate barrier
