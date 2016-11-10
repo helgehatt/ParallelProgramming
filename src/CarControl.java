@@ -104,31 +104,22 @@ class BarrierThreshold extends Barrier {
 	
 	Semaphore	mutex	= new Semaphore(1),
 				wait	= new Semaphore(0),
-				thresholdWait = new Semaphore(0);
-				
+				tWait	= new Semaphore(0);
+	
 	int 		threshold = 9;
-	int			newThreshold = -1;
+	boolean		tWaiting  = false;
 	int 		count	= 0;
 	boolean		isOn	= false;
 	
 	public void sync() throws InterruptedException {
 		mutex.P();
-		if(isOn) {
-			count++;
-			if(count >= threshold) {
-				for(int i = 0; i < threshold; i++) {
-					count--;
-					wait.V();
-				}
-				if (newThreshold > -1)
-					thresholdWait.V();
-			}
-			mutex.V();
-			wait.P();
-		} else {
-			mutex.V();
-		}
-		
+		if (isOn) {
+			if (count == threshold-1) {
+				for (; count > 0; count--) wait.V();
+				if (tWaiting){ tWaiting = false; tWait.V(); }
+				mutex.V();
+			} else { count++; mutex.V(); wait.P(); }
+		} else { mutex.V(); }
 	}  // Wait for others to arrive (if barrier active)
 
 	public void on() throws InterruptedException {
@@ -141,37 +132,50 @@ class BarrierThreshold extends Barrier {
 	public void off() throws InterruptedException {
 		mutex.P();
 		isOn = false;
-		for(; 0 < count; count--) {
-			wait.V();
-		}
+		for (; count > 0; count--) wait.V();
+		if (tWaiting){ tWaiting = false; tWait.V(); }
 		mutex.V();
 		
 	}   // Deactivate barrier
 	
 	public void set(int k) throws InterruptedException{
 		mutex.P();
-		this.newThreshold = k;
-		if (newThreshold <= threshold){
-			threshold = newThreshold;
-			mutex.V();
-			return;
-		}
-		while (newThreshold <= count){
-			for(int j = 0; j < newThreshold; j++) {
-				count--;
-				wait.V();
+		if (1 < k && k < 10){
+			/*
+			 * When k is less than or equal to the current threshold, 
+			 * immediately change and return.
+			 */
+			if (k < threshold){
+				threshold = k;
+				/*
+				 * If there are k or more cars waiting, 
+				 * they should be released group-wise in groups of k cars.
+				 */
+				while (k <= count){
+					for (int i = 0; i < k; i++){
+						count--;
+						wait.V();
+					}
+				}
 			}
-		}
-		if (0 < count && threshold < newThreshold){
-			mutex.V();
-			thresholdWait.P();
-			mutex.P();
-			threshold = newThreshold;
-			newThreshold = -1;
+			/*
+			 *  if there are cars waiting when the threshold is to be raised, 
+			 *  the threshold change must not take place until the next release 
+			 *  (using the current threshold) or when the barrier is deactivated. Meanwhile, 
+			 *  the call of barrierSet(k) should block.
+			 */
+			else if (threshold < k){
+				if (0 < count){
+					tWaiting = true;
+					mutex.V();
+					tWait.P();
+					mutex.P();
+				}
+				threshold = k;
+			}
 		}
 		mutex.V();
 	}
-
 }
 
 class Alley {
