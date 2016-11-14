@@ -16,33 +16,35 @@ byte nleave = 0;
 byte syncCount[CARS];
 byte barrierCount = 0;
 
-inline SYNC() {
-	P(mutex);
-	syncCount[_pid]++;
-	if 
-	:: nenter == CARS-1 ->
-		do
-		:: nenter > 0 	-> nenter--; V(enter)
-		:: else 	 	-> break
-		od			
-	:: else	-> nenter++; V(mutex); P(enter); P(mutex)
-	fi;
-	
-	if 
-	:: nleave == CARS-1 ->
-		do
-		:: nleave > 0 	-> nleave--; V(leave)
-		:: else 	 	-> barrierCount++; break
-		od;
-		V(mutex)
-	:: else	-> nleave++; V(mutex); P(leave)
-	fi;
-}
-
 active [CARS] proctype Car() {
 	do
 	:: 
-		SYNC()
+		P(mutex);
+		syncCount[_pid]++;
+		
+enter:
+		if 
+		:: nenter == CARS-1 ->
+			do
+			:: nenter > 0 	-> nenter--; V(enter)
+			:: else 	 	-> break
+			od			
+		:: else	-> nenter++; V(mutex); P(enter); P(mutex)
+		fi;
+	
+leave:
+		if 
+		:: nleave == CARS-1 ->
+			do
+			:: nleave > 0 	-> nleave--; V(leave)
+			:: else 	 	-> barrierCount++; break
+			od;
+			V(mutex)
+		:: else	-> nleave++; V(mutex); P(leave)
+		fi;
+		
+exit:
+		if :: skip :: break fi
 	od;
 }
 

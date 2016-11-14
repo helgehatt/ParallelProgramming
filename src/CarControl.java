@@ -13,27 +13,28 @@ class Barrier {
 				enter	= new Semaphore(0),
 				leave	= new Semaphore(0);
 				
-	int 		nenter	= 0,
-				nleave	= 0;
+	int 		enterCount	= 0,
+				leaveCount	= 0;
+	
 	boolean		isOn	= false;
 	
 	public void sync() throws InterruptedException {
 		mutex.P();
 		if (isOn) {
-			if (nenter == 8) {
-				for (; nenter > 0; nenter--) enter.V();
+			if (enterCount == 8) {
+				for (; enterCount > 0; enterCount--) enter.V();
 			} else { 
-				nenter++; 
+				enterCount++; 
 				mutex.V();
 				enter.P();
 				mutex.P();
 			}
 			
-			if (nleave == 8) {
-				for (; nleave > 0; nleave--) leave.V();
+			if (leaveCount == 8) {
+				for (; leaveCount > 0; leaveCount--) leave.V();
 				mutex.V();
 			} else { 
-				nleave++; 
+				leaveCount++; 
 				mutex.V();
 				leave.P(); 
 			}
@@ -49,10 +50,10 @@ class Barrier {
 	public void off() throws InterruptedException {
 		mutex.P();
 		isOn = false;
-		for (int i =          nenter; i > 0; i--) enter.V();
-		for (int i = nleave + nenter; i > 0; i--) leave.V();
-		nenter = 0;
-		nleave = 0;
+		for (int i =          enterCount; i > 0; i--) enter.V();
+		for (int i = leaveCount + enterCount; i > 0; i--) leave.V();
+		enterCount = 0;
+		leaveCount = 0;
 		mutex.V();		
 	} 
 
@@ -62,40 +63,55 @@ class Barrier {
 class BarrierMonitor extends Barrier {
 	
 				
-	int 		count	= 0;
-	boolean		isOn	= false;
+	int			enterCount	= 0,
+				leaveCount	= 0;
 	
-	boolean 	synced 	= false;
+	Object		enterLock = new Object();
+	Object		leaveLock = new Object();
 	
-	public synchronized void sync() throws InterruptedException {
+	boolean		isOn = false;
+	
+	public void sync() throws InterruptedException {
 		
-		if (isOn) {
-			while (synced) wait();
+		synchronized (enterLock) {
+			if (!isOn) return;
 			
-			count++;
-			
-			if(count == 9) {
-				synced = true;
-			} else while (!synced) wait();
-			
-			if (synced) {
-				notify();
-				count--;				
-				if (count == 0) synced = false;
-			}			
+			if (enterCount == 8) {
+				enterCount = 0;
+				enterLock.notifyAll();
+			} else {
+				enterCount++;
+				enterLock.wait();
+			}	
+			if (!isOn) return;		
+		}
+		
+		synchronized (leaveLock) {
+			if (leaveCount == 8) {
+				leaveCount = 0;
+				leaveLock.notifyAll();
+			} else {
+				leaveCount++;
+				leaveLock.wait();
+			}	
 		}		
 	}
 
-	public synchronized void on() throws InterruptedException {		
-		isOn = true;		
+	public void on() throws InterruptedException {
+		synchronized (enterLock) {
+			isOn = true;			
+		}		
 	}
 
-	public synchronized void off() throws InterruptedException {		
-		isOn = false;
-		if (count > 0) {
-			synced = true;
-			notify();				
+	public synchronized void off() throws InterruptedException {
+		synchronized (enterLock) {
+			isOn = false;
+			enterLock.notifyAll();	
 		}
+		
+		synchronized (leaveLock) {
+			leaveLock.notifyAll();
+		}		
 	}
 }
 
@@ -184,27 +200,27 @@ class Alley {
 			  	up 		= new Semaphore(0),
 			  	down 	= new Semaphore(0);
 	
-	int 		nup 	= 0, // Children going up
-				ndown 	= 0, // Children going down
-				dup 	= 0, // Children delayed up
-				ddown 	= 0; // Children delayed down
+	int 		upCount 	= 0, // Children going up
+				downCount 	= 0, // Children going down
+				upDelayed 	= 0, // Children delayed up
+				downDelayed = 0; // Children delayed down
 	
 	
 	public void enter(int no) throws InterruptedException {
 		if (no < 5)
 		{
 			mutex.P();
-			if (nup > 0) { ddown++; mutex.V(); down.P(); }
-			ndown++;
-			if (ddown > 0) { ddown--; down.V();	}
+			if (upCount > 0) { downDelayed++; mutex.V(); down.P(); }
+			downCount++;
+			if (downDelayed > 0) { downDelayed--; down.V();	}
 			else mutex.V();
 		}
 		else 
 		{
 			mutex.P();
-			if (ndown > 0) { dup++; mutex.V(); up.P(); }
-			nup++;
-			if (dup > 0) { dup--; up.V(); }
+			if (downCount > 0) { upDelayed++; mutex.V(); up.P(); }
+			upCount++;
+			if (upDelayed > 0) { upDelayed--; up.V(); }
 			else mutex.V();
 		}
 	}
@@ -213,15 +229,15 @@ class Alley {
 		if (no < 5)
 		{
 			mutex.P();
-			ndown--;			
-			if (ndown == 0 && dup > 0) { dup--; up.V();	}
+			downCount--;			
+			if (downCount == 0 && upDelayed > 0) { upDelayed--; up.V();	}
 			else mutex.V();
 		}
 		else
 		{
 			mutex.P();
-			nup--;			
-			if (nup == 0 && ddown > 0) { ddown--; down.V();	}
+			upCount--;			
+			if (upCount == 0 && downDelayed > 0) { downDelayed--; down.V();	}
 			else mutex.V();
 		}		
 	}
@@ -230,25 +246,25 @@ class Alley {
 
 class AlleyMonitor extends Alley {
 		
-	int 		nup 	= 0, // Children going up
-				ndown 	= 0, // Children going down
-				dup 	= 0, // Children delayed up
-				ddown 	= 0; // Children delayed down
+	int 	upCount 	= 0, // Children going up
+			downCount 	= 0, // Children going down
+			upDelayed 	= 0, // Children delayed up
+			downDelayed = 0; // Children delayed down
 	
 	
 	public synchronized void enter(int no) throws InterruptedException {
 		if (no < 5)
 		{			
-			if (nup > 0) { ddown++;  while(nup>0) {wait();} }
-			ndown++;
-			if (ddown > 0) { ddown--; notify();	}
+			if (upCount > 0) { downDelayed++;  while(upCount>0) {wait();} }
+			downCount++;
+			if (downDelayed > 0) { downDelayed--; notify();	}
 			
 		}
 		else 
 		{			
-			if (ndown > 0) { dup++;  while(ndown>0) {wait();} }
-			nup++;
-			if (dup > 0) { dup--; notify(); }
+			if (downCount > 0) { upDelayed++;  while(downCount>0) {wait();} }
+			upCount++;
+			if (upDelayed > 0) { upDelayed--; notify(); }
 			
 		}
 	}
@@ -256,52 +272,54 @@ class AlleyMonitor extends Alley {
 	public synchronized void leave(int no) throws InterruptedException {
 		if (no < 5)
 		{			
-			ndown--;			
-			if (ndown == 0 && dup > 0) { dup--; notify();}			
+			downCount--;			
+			if (downCount == 0 && upDelayed > 0) { upDelayed--; notify();}			
 		}
 		else
 		{			
-			nup--;			
-			if (nup == 0 && ddown > 0) { ddown--; notify();	}			
+			upCount--;			
+			if (upCount == 0 && downDelayed > 0) { downDelayed--; notify();	}			
 		}		
 	}
 }
 
 class AlleyMonitorFair extends Alley {
 	
-	int 		nup 	= 0, // Children going up
-				ndown 	= 0, // Children going down
-				dup 	= 0, // Children delayed up
-				ddown 	= 0; // Children delayed down
+	int 		upCount 	= 0, // Children going up
+				downCount 	= 0, // Children going down
+				upDelayed 	= 0, // Children delayed up
+				downDelayed = 0; // Children delayed down	
+	boolean 	upWait 		= false, // Children going up should wait
+				downWait 	= false; // Children going down should wait
 	
 	
 	public synchronized void enter(int no) throws InterruptedException {
 		if (no < 5)
-		{			
-			if (nup > 0) { ddown++;  while(nup>0) {wait();} }
-			ndown++;
-			if (ddown > 0) { ddown--; notify();	}
-			
+		{
+			if (upCount > 0 || downWait) { downDelayed++;  while(upCount > 0 || downWait) wait(); }
+			downCount++;
+			if (downDelayed > 0) { downDelayed--; }
 		}
 		else 
 		{			
-			if (ndown > 0) { dup++;  while(ndown>0) {wait();} }
-			nup++;
-			if (dup > 0) { dup--; notify(); }
-			
+			if (downCount > 0 || upWait) { upDelayed++; while(downCount > 0 || upWait) wait(); }
+			upCount++;
+			if (upDelayed > 0) { upDelayed--; }		
 		}
 	}
 	
 	public synchronized void leave(int no) throws InterruptedException {
 		if (no < 5)
 		{			
-			ndown--;			
-			if (ndown == 0 && dup > 0) { dup--; notify();}			
+			downCount--;
+			if (downCount == 0 && upDelayed > 0) { upDelayed--; upWait = false; notifyAll(); }	
+			else if (upDelayed > 0) downWait = true; 		
 		}
 		else
 		{			
-			nup--;			
-			if (nup == 0 && ddown > 0) { ddown--; notify();	}			
+			upCount--;
+			if (upCount == 0 && downDelayed > 0) { downDelayed--; downWait = false; notifyAll(); }	
+			else if (downDelayed > 0) upWait = true; 				
 		}		
 	}
 }
@@ -460,6 +478,8 @@ class Car extends Thread {
 
             while (running) {
                 sleep(speed());
+            	
+                newpos = nextPos(curpos);
   
                 if (atGate(curpos)) { 
                     mygate.pass(); 
@@ -473,8 +493,6 @@ class Car extends Thread {
                 } else if (atBarrier(curpos)) {
                 	barrier.sync();
                 }
-                	
-                newpos = nextPos(curpos);
                 
                 tiles[newpos.row][newpos.col].P();
                 
@@ -521,8 +539,8 @@ public class CarControl implements CarControlI{
         car  = new  Car[9];
         gate = new Gate[9];
         tiles = new Semaphore[11][12];
-        alley = new AlleyMonitor(); 
-        barrier = new Barrier();
+        alley = new AlleyMonitorFair(); 
+        barrier = new BarrierMonitor();
         
         for (int x = 0; x < tiles.length; x++) {
         	for (int y = 0; y < tiles[0].length; y++) {

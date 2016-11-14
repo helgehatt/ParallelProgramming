@@ -14,16 +14,12 @@ byte ddown 	= 0;
 
 mtype = { UP, DOWN }
 
+pid p1, p2;
+
 init {
 	atomic {
-		run Car(UP);
-		run Car(UP);
-		run Car(UP);
-		run Car(UP);
-		run Car(DOWN);
-		run Car(DOWN);
-		run Car(DOWN);
-		run Car(DOWN);
+		p1 = run Car(UP);
+		p2 = run Car(DOWN);
 	}
 }
 
@@ -76,7 +72,12 @@ inline LEAVE(type) {
 proctype Car(mtype type) {
 	do
 	::
-		ENTER(type);		
+		skip;
+
+enter:
+		ENTER(type);	
+
+leave:	
 		LEAVE(type)
 	od;
 }
@@ -84,3 +85,6 @@ proctype Car(mtype type) {
 active proctype Check_Inv() {
 end: nup > 0 && ndown > 0 -> assert(false);
 }
+
+ltl res { [] ( (Car[p1]@enter || Car[p2]@enter) -> <> (Car[p1]@leave || Car[p2]@leave) )}
+//ltl obl { [] ( ( (Car[p1]@enter) && [] !(Car[p2]@enter) ) -> <> (Car[p1]@leave) ) }
