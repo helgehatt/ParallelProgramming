@@ -22,7 +22,7 @@ active [CARS] proctype Car() {
 		P(mutex);
 		syncCount[_pid]++;
 		
-enter:
+entering:
 		if 
 		:: nenter == CARS-1 ->
 			do
@@ -32,7 +32,7 @@ enter:
 		:: else	-> nenter++; V(mutex); P(enter); P(mutex)
 		fi;
 	
-leave:
+leaving:
 		if 
 		:: nleave == CARS-1 ->
 			do
@@ -43,7 +43,7 @@ leave:
 		:: else	-> nleave++; V(mutex); P(leave)
 		fi;
 		
-exit:
+exiting:
 		if :: skip :: break fi
 	od;
 }
@@ -56,3 +56,8 @@ active proctype Check_Inv() {
 	:: syncCount[3] - barrierCount > 1 -> assert(false)
 	fi;
 }
+
+//ltl release { [] (Car[0]@entering && Car[1]@entering && Car[2]@entering && Car[3]@entering 
+//            -> <> Car[0]@leaving  && Car[1]@leaving  && Car[2]@leaving  && Car[3]@leaving) }
+
+ltl block { [] ([] Car[0]@entering -> [] !Car[1]@exiting) }
