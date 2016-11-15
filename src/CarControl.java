@@ -9,36 +9,28 @@ import java.awt.Color;
 
 class Barrier {
 		
-	Semaphore	mutex	= new Semaphore(1),
-				enter	= new Semaphore(0),
-				leave	= new Semaphore(0);
+	Semaphore	mutex	= new Semaphore(1), // Mutual exclusion semaphore
+				enter	= new Semaphore(0), // Enter barrier semaphore
+				leave	= new Semaphore(0); // Leave barrier semaphore
 				
-	int 		enterCount	= 0,
-				leaveCount	= 0;
+	int 		enterCount	= 0, // Cars currently in enter phase
+				leaveCount	= 0; // Cars currently in leave phase
 	
-	boolean		isOn	= false;
+	boolean		isOn	= false; // Barrier on/off switch
 	
 	public void sync() throws InterruptedException {
 		mutex.P();
 		if (isOn) {
-			if (enterCount == 8) {
-				for (; enterCount > 0; enterCount--) enter.V();
-			} else { 
-				enterCount++; 
-				mutex.V();
-				enter.P();
-				mutex.P();
-			}
-			
-			if (leaveCount == 8) {
-				for (; leaveCount > 0; leaveCount--) leave.V();
-				mutex.V();
-			} else { 
-				leaveCount++; 
-				mutex.V();
-				leave.P(); 
-			}
-		} else { mutex.V(); }
+			// The last car hands out enter coconuts	
+			if (enterCount == 8) for (; enterCount > 0; enterCount--) enter.V();
+			// Wait for enter coconut
+			else { enterCount++; mutex.V(); enter.P(); mutex.P(); }
+			// The last car hands out leave coconuts
+			if (leaveCount == 8) for (; leaveCount > 0; leaveCount--) leave.V();
+			// Wait for leave coconut
+			else { leaveCount++; leave.P(); }
+		}
+		mutex.V();
 	}
 
 	public void on() throws InterruptedException {
@@ -50,8 +42,10 @@ class Barrier {
 	public void off() throws InterruptedException {
 		mutex.P();
 		isOn = false;
-		for (int i =          enterCount; i > 0; i--) enter.V();
+		// Hand out coconuts for everyone waiting
+		for (int i =              enterCount; i > 0; i--) enter.V();
 		for (int i = leaveCount + enterCount; i > 0; i--) leave.V();
+		// Reset counts
 		enterCount = 0;
 		leaveCount = 0;
 		mutex.V();		
@@ -62,55 +56,47 @@ class Barrier {
 
 class BarrierMonitor extends Barrier {
 				
-	int			enterCount	= 0,
-				leaveCount	= 0;
+	int			enterCount	= 0, // Cars currently in enter phase
+				leaveCount	= 0; // Cars currently in leave phase
 	
-	Object		enterLock = new Object();
-	Object		leaveLock = new Object();
-	
-	boolean		isOn = false;
-	
-	public void sync() throws InterruptedException {
+	boolean		isOn = false; // Barrier on/off switch
+
+	public synchronized void sync() throws InterruptedException {
+		if (!isOn) return;
+
+		enterCount++;
 		
-		synchronized (enterLock) {
-			if (!isOn) return;
-			
-			if (enterCount == 8) {
-				enterCount = 0;
-				enterLock.notifyAll();
-			} else {
-				enterCount++;
-				enterLock.wait();
-			}	
-			if (!isOn) return;
-		}
+		// Last car notifies all
+		if (enterCount == 9) {
+			leaveCount = 0;
+			notifyAll();		
+		} // Wait
+		else while (enterCount < 9) wait();
 		
-		synchronized (leaveLock) {
-			if (leaveCount == 8) {
-				leaveCount = 0;
-				leaveLock.notifyAll();
-			} else {
-				leaveCount++;
-				leaveLock.wait();
-			}	
-		}		
+		// Added to easily release cars when barrier is turned off
+		if (!isOn) return;
+		
+		leaveCount++;
+
+		// Last car notifies all
+		if (leaveCount == 9) {
+			enterCount = 0;
+			notifyAll();
+		} // Wait
+		else while (leaveCount < 9) wait();
+	}
+	
+	public synchronized void on() throws InterruptedException {
+		isOn = true;
+		enterCount = 0;
+		leaveCount = 0;
 	}
 
-	public void on() throws InterruptedException {
-		synchronized (enterLock) {
-			isOn = true;			
-		}		
-	}
-
-	public void off() throws InterruptedException {
-		synchronized (enterLock) {
-			isOn = false;
-			enterLock.notifyAll();	
-		}
-		
-		synchronized (leaveLock) {
-			leaveLock.notifyAll();
-		}		
+	public synchronized void off() throws InterruptedException {
+		isOn = false;
+		enterCount = 9;
+		leaveCount = 9;
+		notifyAll();
 	}
 }
 
@@ -549,7 +535,7 @@ public class CarControl implements CarControlI{
         gate = new Gate[9];
         tiles = new Semaphore[11][12];
         alley = new AlleyMonitorFair(); 
-        barrier = new BarrierThreshold();
+        barrier = new BarrierMonitor();
         
         for (int x = 0; x < tiles.length; x++) {
         	for (int y = 0; y < tiles[0].length; y++) {
