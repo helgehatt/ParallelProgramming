@@ -23,12 +23,15 @@ class Barrier {
 		if (isOn) {
 			// The last car hands out enter coconuts	
 			if (enterCount == 8) for (; enterCount > 0; enterCount--) enter.V();
-			// Wait for enter coconut
-			else { enterCount++; mutex.V(); enter.P(); mutex.P(); }
+			else { // Wait for enter coconut
+				enterCount++; mutex.V(); enter.P(); 
+				mutex.P(); // Get mutex again before continuing
+			}
 			// The last car hands out leave coconuts
 			if (leaveCount == 8) for (; leaveCount > 0; leaveCount--) leave.V();
-			// Wait for leave coconut
-			else { leaveCount++; leave.P(); }
+			else { // Wait for leave coconut
+				leaveCount++; leave.P();
+			} 
 		}
 		mutex.V();
 	}
@@ -193,9 +196,9 @@ class BarrierThreshold extends Barrier {
 
 class Alley {
 	
-	Semaphore	mutex 	= new Semaphore(1), // Semaphore for critical region
-			  	up 		= new Semaphore(0),
-			  	down 	= new Semaphore(0);
+	Semaphore	mutex 	= new Semaphore(1), // Mutual exclusion semaphore
+			  	up 		= new Semaphore(0), // Going up semaphore
+			  	down 	= new Semaphore(0); // Going down semaphore
 	
 	int 		upCount 	= 0, // Children going up
 				downCount 	= 0, // Children going down
@@ -204,36 +207,42 @@ class Alley {
 	
 	
 	public void enter(int no) throws InterruptedException {
-		if (no < 5)
+		if (no < 5)	// Going down
 		{
 			mutex.P();
+			// Wait if someone is going in the opposite direction
 			if (upCount > 0) { downDelayed++; mutex.V(); down.P(); }
 			downCount++;
+			// Pass the baton
 			if (downDelayed > 0) { downDelayed--; down.V();	}
 			else mutex.V();
 		}
-		else 
+		else 		// Going up
 		{
 			mutex.P();
+			// Wait if someone is going in the opposite direction
 			if (downCount > 0) { upDelayed++; mutex.V(); up.P(); }
 			upCount++;
+			// Pass the baton 
 			if (upDelayed > 0) { upDelayed--; up.V(); }
 			else mutex.V();
 		}
 	}
 	
 	public void leave(int no) throws InterruptedException {
-		if (no < 5)
+		if (no < 5)	// Going down
 		{
 			mutex.P();
-			downCount--;			
+			downCount--;
+			// Pass the baton
 			if (downCount == 0 && upDelayed > 0) { upDelayed--; up.V();	}
 			else mutex.V();
 		}
-		else
+		else		// Going up
 		{
 			mutex.P();
-			upCount--;			
+			upCount--;
+			// Pass the baton
 			if (upCount == 0 && downDelayed > 0) { downDelayed--; down.V();	}
 			else mutex.V();
 		}		
@@ -250,17 +259,21 @@ class AlleyMonitor extends Alley {
 	
 	
 	public synchronized void enter(int no) throws InterruptedException {
-		if (no < 5)
-		{			
+		if (no < 5)	// Going down
+		{
+			// Wait if someone is going in the opposite direction
 			if (upCount > 0) { downDelayed++;  while(upCount > 0) wait(); }
 			downCount++;
+			// Pass the baton
 			if (downDelayed > 0) { downDelayed--; notify();	}
 			
 		}
-		else 
+		else 		// Going up
 		{			
+			// Wait if someone is going in the opposite direction
 			if (downCount > 0) { upDelayed++;  while(downCount > 0) wait(); }
 			upCount++;
+			// Pass the baton
 			if (upDelayed > 0) { upDelayed--; notify(); }
 			
 		}
@@ -269,12 +282,14 @@ class AlleyMonitor extends Alley {
 	public synchronized void leave(int no) throws InterruptedException {
 		if (no < 5)
 		{			
-			downCount--;			
+			downCount--;
+			// Pass the baton		
 			if (downCount == 0 && upDelayed > 0) { upDelayed--; notify(); }			
 		}
 		else
 		{			
-			upCount--;			
+			upCount--;
+			// Pass the baton	
 			if (upCount == 0 && downDelayed > 0) { downDelayed--; notify();	}			
 		}		
 	}
@@ -293,11 +308,15 @@ class AlleyMonitorFair extends Alley {
 	public synchronized void enter(int no) throws InterruptedException {
 		if (no < 5)
 		{
+			// Wait if someone is going in the opposite direction
+			// OR you have been told to wait
 			if (upCount > 0 || downWait) { downDelayed++;  while(upCount > 0 || downWait) wait(); }
 			downCount++;
 		}
 		else 
-		{			
+		{
+			// Wait if someone is going in the opposite direction
+			// OR you have been told to wait
 			if (downCount > 0 || upWait) { upDelayed++; while(downCount > 0 || upWait) wait(); }
 			upCount++;	
 		}
@@ -307,13 +326,17 @@ class AlleyMonitorFair extends Alley {
 		if (no < 5)
 		{			
 			downCount--;
+			// Let the opposite direction know its their turn
 			if (downCount == 0 && upDelayed > 0) { upDelayed = 0; upWait = false; notifyAll(); }	
+			// Switch priority if someone is waiting in the opposite direction
 			else if (upDelayed > 0) downWait = true; 		
 		}
 		else
 		{			
 			upCount--;
+			// Let the opposite direction know its their turn
 			if (upCount == 0 && downDelayed > 0) { downDelayed = 0; downWait = false; notifyAll(); }	
+			// Switch priority if someone is waiting in the opposite direction
 			else if (downDelayed > 0) upWait = true; 				
 		}		
 	}
