@@ -10,8 +10,8 @@ sem mutex 	= 1;
 sem enter	= 0;
 sem leave	= 0;
 
-byte nenter	= 0;
-byte nleave = 0;
+byte enterCount	= 0;
+byte leaveCount = 0;
 
 byte syncCount[CARS];
 byte barrierCount = 0;
@@ -24,23 +24,23 @@ active [CARS] proctype Car() {
 		
 entering:
 		if 
-		:: nenter == CARS-1 ->
+		:: enterCount == CARS-1 ->
 			do
-			:: nenter > 0 	-> nenter--; V(enter)
-			:: else 	 	-> break
+			:: enterCount > 0 	-> enterCount--; V(enter)
+			:: else 	 		-> break
 			od			
-		:: else	-> nenter++; V(mutex); P(enter); P(mutex)
+		:: else	-> enterCount++; V(mutex); P(enter); P(mutex)
 		fi;
 	
 leaving:
 		if 
-		:: nleave == CARS-1 ->
+		:: leaveCount == CARS-1 ->
 			do
-			:: nleave > 0 	-> nleave--; V(leave)
-			:: else 	 	-> barrierCount++; break
+			:: leaveCount > 0 	-> leaveCount--; V(leave)
+			:: else 	 		-> barrierCount++; break
 			od;
 			V(mutex)
-		:: else	-> nleave++; V(mutex); P(leave)
+		:: else	-> leaveCount++; V(mutex); P(leave)
 		fi;
 		
 exiting:

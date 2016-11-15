@@ -61,7 +61,6 @@ class Barrier {
 
 
 class BarrierMonitor extends Barrier {
-	
 				
 	int			enterCount	= 0,
 				leaveCount	= 0;
@@ -83,7 +82,7 @@ class BarrierMonitor extends Barrier {
 				enterCount++;
 				enterLock.wait();
 			}	
-			if (!isOn) return;		
+			if (!isOn) return;
 		}
 		
 		synchronized (leaveLock) {
@@ -103,7 +102,7 @@ class BarrierMonitor extends Barrier {
 		}		
 	}
 
-	public synchronized void off() throws InterruptedException {
+	public void off() throws InterruptedException {
 		synchronized (enterLock) {
 			isOn = false;
 			enterLock.notifyAll();	
@@ -255,14 +254,14 @@ class AlleyMonitor extends Alley {
 	public synchronized void enter(int no) throws InterruptedException {
 		if (no < 5)
 		{			
-			if (upCount > 0) { downDelayed++;  while(upCount>0) {wait();} }
+			if (upCount > 0) { downDelayed++;  while(upCount > 0) wait(); }
 			downCount++;
 			if (downDelayed > 0) { downDelayed--; notify();	}
 			
 		}
 		else 
 		{			
-			if (downCount > 0) { upDelayed++;  while(downCount>0) {wait();} }
+			if (downCount > 0) { upDelayed++;  while(downCount > 0) wait(); }
 			upCount++;
 			if (upDelayed > 0) { upDelayed--; notify(); }
 			
@@ -273,7 +272,7 @@ class AlleyMonitor extends Alley {
 		if (no < 5)
 		{			
 			downCount--;			
-			if (downCount == 0 && upDelayed > 0) { upDelayed--; notify();}			
+			if (downCount == 0 && upDelayed > 0) { upDelayed--; notify(); }			
 		}
 		else
 		{			
@@ -292,19 +291,17 @@ class AlleyMonitorFair extends Alley {
 	boolean 	upWait 		= false, // Children going up should wait
 				downWait 	= false; // Children going down should wait
 	
-	
+
 	public synchronized void enter(int no) throws InterruptedException {
 		if (no < 5)
 		{
 			if (upCount > 0 || downWait) { downDelayed++;  while(upCount > 0 || downWait) wait(); }
 			downCount++;
-			if (downDelayed > 0) { downDelayed--; }
 		}
 		else 
 		{			
 			if (downCount > 0 || upWait) { upDelayed++; while(downCount > 0 || upWait) wait(); }
-			upCount++;
-			if (upDelayed > 0) { upDelayed--; }		
+			upCount++;	
 		}
 	}
 	
@@ -312,13 +309,13 @@ class AlleyMonitorFair extends Alley {
 		if (no < 5)
 		{			
 			downCount--;
-			if (downCount == 0 && upDelayed > 0) { upDelayed--; upWait = false; notifyAll(); }	
+			if (downCount == 0 && upDelayed > 0) { upDelayed = 0; upWait = false; notifyAll(); }	
 			else if (upDelayed > 0) downWait = true; 		
 		}
 		else
 		{			
 			upCount--;
-			if (upCount == 0 && downDelayed > 0) { downDelayed--; downWait = false; notifyAll(); }	
+			if (upCount == 0 && downDelayed > 0) { downDelayed = 0; downWait = false; notifyAll(); }	
 			else if (downDelayed > 0) upWait = true; 				
 		}		
 	}

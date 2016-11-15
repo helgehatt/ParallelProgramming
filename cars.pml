@@ -7,10 +7,10 @@ sem mutex	= 1;
 sem up 		= 0;
 sem down 	= 0;
 
-byte nup 	= 0;
-byte ndown 	= 0;
-byte dup 	= 0;
-byte ddown 	= 0;
+byte upCount 	 = 0;
+byte downCount 	 = 0;
+byte upDelayed	 = 0;
+byte downDelayed = 0;
 
 mtype = { UP, DOWN }
 
@@ -23,68 +23,74 @@ init {
 	}
 }
 
-inline ENTER(type) {
+inline ENTER(dir) {
 	if 
-	:: type == DOWN ->
+	:: dir == DOWN ->
 		P(mutex);
 		if 
-		:: nup > 0 		-> ddown++; V(mutex); P(down) 
-		:: else			-> skip
+		:: upCount > 0 		-> downDelayed++; V(mutex); P(down) 
+		:: else				-> skip
 		fi;
-		ndown++;
+		downCount++;
 		if 
-		:: ddown > 0 	-> ddown--; V(down)
-		:: else 		-> V(mutex)
+		:: downDelayed > 0 	-> downDelayed--; V(down)
+		:: else 			-> V(mutex)
 		fi		
 	:: else 		->
 		P(mutex);
 		if 
-		:: ndown > 0 	-> dup++; V(mutex); P(up) 
-		:: else		 	-> skip
+		:: downCount > 0 	-> upDelayed++; V(mutex); P(up) 
+		:: else		 		-> skip
 		fi;
-		nup++;
+		upCount++;
 		if 
-		:: dup > 0 		-> dup--; V(up)
-		:: else 		-> V(mutex)
+		:: upDelayed > 0 	-> upDelayed--; V(up)
+		:: else 			-> V(mutex)
 		fi
 	fi;
 }
 
-inline LEAVE(type) {
+inline LEAVE(dir) {
 	if
-	:: type == DOWN ->
+	:: dir == DOWN ->
 		P(mutex);
-		ndown--;
+		downCount--;
 		if 
-		:: ndown == 0 && dup > 0 -> dup--; V(up)
-		:: else					 -> V(mutex)
+		:: downCount == 0 && upDelayed > 0 	-> upDelayed--; V(up)
+		:: else					 			-> V(mutex)
 		fi	
 	:: else			->
 		P(mutex);
-		nup--;
+		upCount--;
 		if 
-		:: nup == 0 && ddown > 0 -> ddown--; V(down)
-		:: else					 -> V(mutex)
+		:: upCount == 0 && downDelayed > 0 	-> downDelayed--; V(down)
+		:: else					 			-> V(mutex)
 		fi
 	fi;
 }
 
-proctype Car(mtype type) {
+proctype Car(mtype dir) {
 	do
 	::
 		skip;
 
-enter:
-		ENTER(type);	
+entering:
+		ENTER(dir);	
 
-leave:	
-		LEAVE(type)
+leaving:	
+		LEAVE(dir);
+		
+exiting:
+		if :: skip :: break fi
 	od;
 }
 
 active proctype Check_Inv() {
-end: nup > 0 && ndown > 0 -> assert(false);
+end: upCount > 0 && downCount > 0 -> assert(false);
 }
 
-ltl res { [] ( (Car[p1]@enter || Car[p2]@enter) -> <> (Car[p1]@leave || Car[p2]@leave) )}
-//ltl obl { [] ( ( (Car[p1]@enter) && [] !(Car[p2]@enter) ) -> <> (Car[p1]@leave) ) }
+
+ltl res1 { [] ( ( Car[p1]@entering || Car[p2]@entering ) -> <> ( Car[p1]@leaving  || Car[p2]@leaving  ) ) }
+//ltl res2 { [] ( ( Car[p1]@leaving  || Car[p2]@leaving  ) -> <> ( Car[p1]@exiting  || Car[p2]@exiting  ) ) }
+//ltl obl1 { [] ( ( Car[p1]@entering && [] !Car[p2]@entering ) -> <> Car[p1]@leaving ) }
+//ltl obl2 { [] ( ( Car[p1]@leaving  && [] !Car[p2]@leaving  ) -> <> Car[p1]@exiting ) }
