@@ -28,12 +28,14 @@ class Barrier {
 				mutex.P(); // Get mutex again before continuing
 			}
 			// The last car hands out leave coconuts
-			if (leaveCount == 8) for (; leaveCount > 0; leaveCount--) leave.V();
+			if (leaveCount == 8) {
+				for (; leaveCount > 0; leaveCount--) leave.V();
+				mutex.V();
+			}
 			else { // Wait for leave coconut
-				leaveCount++; leave.P();
+				leaveCount++; mutex.V(); leave.P();
 			} 
-		}
-		mutex.V();
+		} else { mutex.V(); }		
 	}
 
 	public void on() throws InterruptedException {
