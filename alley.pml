@@ -14,12 +14,14 @@ byte downDelayed = 0;
 
 mtype = { UP, DOWN }
 
-pid p1, p2;
+pid p1, p2, p3, p4;
 
 init {
 	atomic {
 		p1 = run Car(UP);
 		p2 = run Car(DOWN);
+		p3 = run Car(UP);
+		p4 = run Car(DOWN);
 	}
 }
 
@@ -89,8 +91,7 @@ active proctype Check_Inv() {
 end: upCount > 0 && downCount > 0 -> assert(false);
 }
 
-
-ltl res1 { [] ( ( Car[p1]@entering || Car[p2]@entering ) -> <> ( Car[p1]@leaving  || Car[p2]@leaving  ) ) }
-//ltl res2 { [] ( ( Car[p1]@leaving  || Car[p2]@leaving  ) -> <> ( Car[p1]@exiting  || Car[p2]@exiting  ) ) }
-//ltl obl1 { [] ( ( Car[p1]@entering && [] !Car[p2]@entering ) -> <> Car[p1]@leaving ) }
-//ltl obl2 { [] ( ( Car[p1]@leaving  && [] !Car[p2]@leaving  ) -> <> Car[p1]@exiting ) }
+//ltl obl1 { [] ( ( Car[p1]@entering && [] !Car[p2]@entering && [] !Car[p3]@entering && [] !Car[p4]@entering ) -> <> Car[p1]@leaving ) }
+//ltl obl2 { [] ( ( Car[p1]@leaving  && [] !Car[p2]@leaving  && [] !Car[p3]@leaving  && [] !Car[p4]@leaving  ) -> <> Car[p1]@exiting ) }
+//ltl res1 { [] ( ( Car[p1]@entering || Car[p2]@entering || Car[p3]@entering || Car[p4]@entering ) -> <> ( Car[p1]@leaving || Car[p2]@leaving || Car[p3]@leaving || Car[p4]@leaving ) ) }
+//ltl res2 { [] ( ( Car[p1]@leaving  || Car[p2]@leaving  || Car[p3]@leaving  || Car[p4]@leaving  ) -> <> ( Car[p1]@exiting || Car[p2]@exiting || Car[p3]@exiting || Car[p4]@exiting ) ) }
